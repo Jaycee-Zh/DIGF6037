@@ -27,7 +27,7 @@ int A_mappedSensorValue = 0;
 int B_sensorValue = 0;
 int B_mappedSensorValue = 0;
 int B_constrainedInput = 0;
-int connectionTrigger[] = {};
+int connectionTrigger[] = { 900, 900 };  // #hack: manually set the value until the bug fixed
 
 
 // Factors - change to get different sense
@@ -88,8 +88,15 @@ void setup() {
     if (thisSensorValue > sensorMax[0]) {
       sensorMax[0] = thisSensorValue;
     }
-    Serial.println(thisSensorValue); // for debugging
+    // Serial.println(thisSensorValue); // for debugging
   }
+  // for debugging
+  // Serial.println("A, after 5s");
+  // Serial.println(sensorMin[0]);
+  // Serial.println(sensorMax[0]);
+  // Serial.println("B, after 8s");
+  // Serial.println(sensorMin[1]);
+  // Serial.println(sensorMax[1]);
   // signal the end of the calibration period
   digitalWrite(waveLEDPins[1], LOW);
 
@@ -103,26 +110,36 @@ void setup() {
     if (thisSensorValue > sensorMax[1]) {
       sensorMax[1] = thisSensorValue;
     }
-    Serial.println(thisSensorValue); // for debugging
+    // Serial.println(thisSensorValue); // for debugging
   }
   // signal the end of the calibration period
   digitalWrite(waveLEDPins[waveLEDPinsNum - 2], LOW);
 
-
-  // set connectionTriggers
-  for (int i = 0; i < sensorNum; i++) {
-    connectionTrigger[i] = sensorMin[i] + (sensorMax[i] - sensorMin[i]) * connectionSensitivity;
-  }
   // for debugging
-  Serial.print(" A:");
+  Serial.println("A, after 8s");
   Serial.println(sensorMin[0]);
   Serial.println(sensorMax[0]);
-  Serial.println(connectionTrigger[0]);
-  Serial.println("B: ");
+  Serial.println("B, after 8s");
   Serial.println(sensorMin[1]);
   Serial.println(sensorMax[1]);
-  Serial.println(connectionTrigger[1]);
-  Serial.println(".");
+
+
+  // set connectionTriggers
+  // for (int i = 0; i < sensorNum; i++) {
+  //   connectionTrigger[i] = sensorMin[i] + (sensorMax[i] - sensorMin[i]) * connectionSensitivity; // #debug: somehow this line will change the sensorMax, need more study
+  //   Serial.println(sensorMin[i]);
+  //   Serial.println(sensorMax[i]);
+  // }
+  // for debugging
+  // Serial.print(" A:");
+  // Serial.println(sensorMin[0]);
+  // Serial.println(sensorMax[0]);
+  // Serial.println(connectionTrigger[0]);
+  // Serial.println("B: ");
+  // Serial.println(sensorMin[1]);
+  // Serial.println(sensorMax[1]);
+  // Serial.println(connectionTrigger[1]);
+  // Serial.println(".");
 }
 
 
@@ -165,18 +182,17 @@ void loop() {
     } else {
       analogWrite(waveLEDPins[i], 0);
     }
-    for (int i = 0; i < connectionLEDPinsNum; i++) {
-      analogWrite(connectionLEDPins[i], 0);
-    }
   }
+  for (int i = 0; i < connectionLEDPinsNum; i++) {
+    analogWrite(connectionLEDPins[i], 0);
+  }
+
 
 
   // when player A is pressing
   if (A_constrainedInput > sensorMin[0]) {
-    // if it lightens up the other spot, show the blinking animation
-    if (A_ledToLight == waveLEDPinsNum) {
-      analogWrite(waveLEDPins[waveLEDPinsNum - 1], initial_brightness);
-    };
+
+
     // Light up the appropriate number of LEDs
     for (int i = 0; i < waveLEDPinsNum; i++) {
       // digital outputs are used on the centre three, creating a slow-down animation; analog ones are used on the sides
@@ -193,6 +209,21 @@ void loop() {
             digitalWrite(waveLEDPins[i], HIGH);
             digitalWrite(waveLEDPins[i - 1], HIGH);
             digitalWrite(waveLEDPins[i - 2], HIGH);
+            break;
+          case 6:
+            analogWrite(waveLEDPins[i], waveStrength[0]);
+            digitalWrite(waveLEDPins[i - 1], HIGH);
+            digitalWrite(waveLEDPins[i - 2], HIGH);
+            break;
+          case 7:
+            analogWrite(waveLEDPins[i], waveStrength[0]);
+            analogWrite(waveLEDPins[i - 1], waveStrength[1]);
+            // digitalWrite(waveLEDPins[i - 2], HIGH);
+            break;
+          case 8:
+            // if it lightens up the other spot, show the blinking animation
+            analogWrite(waveLEDPins[waveLEDPinsNum - 1], initial_brightness);
+            analogWrite(waveLEDPins[i - 1], waveStrength[1]);
             break;
           default:
             analogWrite(waveLEDPins[i], waveStrength[0]);
@@ -263,4 +294,3 @@ int oscillate(int minVal, int maxVal, int oscillationTime) {
   //output the value
   return brightness;
 }
-
