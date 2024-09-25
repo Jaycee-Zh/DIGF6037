@@ -4,3 +4,263 @@ Project Pressure - Peer Pressure
 
 Based on Creation & Computation: pressure meter (https://github.com/DigitalFuturesOCADU/CC2024/blob/main/experiment1/fsrWorkshop_pressureMeter/fsrWorkshop_pressureMeter.ino)
 */
+
+
+// Global variables
+const int sensorPins[] = { A0, A1 };  // Analog input pin for the pressure sensors
+const int sensorNum = 2;              // Number of input sensors
+
+const int waveLEDPins[] = { 12, 11, 10, 8, 7, 4, 5, 3, 2 };  // note: 4, 7, 8 are digital outputs; temperarily disable 9, 4 (not connected)
+// const int waveLEDPins[] = { 12, 11, 10, 9, 8, 7, 4, 6, 5, 3, 2 };  // note: 4, 7, 8 are digital outputs
+const int waveLEDPinsNum = 9;  // Number of LEDs used for waves anim
+// const int waveLEDPinsNum = 11;  // Number of LEDs used for waves anim
+
+const int connectionLEDPins[] = { 16, 17, 19 };  // note: temperarily disable
+const int connectionLEDPinsNum = 3;              // Number of LEDs used for connection anim
+
+// Variables
+int sensorMin[] = { 1023, 1023 };  // Initial min value for calibration
+int sensorMax[] = { 0, 0 };        // Initial min value for calibration
+int A_sensorValue = 0;
+int A_constrainedInput = 0;
+int A_mappedSensorValue = 0;
+int B_sensorValue = 0;
+int B_mappedSensorValue = 0;
+int B_constrainedInput = 0;
+int connectionTrigger[] = {};
+
+
+// Factors - change to get different sense
+float connectionSensitivity = 0.2;
+float waveSpeedRatio = 3;
+int waveStrength[] = { 255, 30, 5 };
+float connenctionRatio = 0.25;
+
+
+// setup
+void setup() {
+  // Initialize serial communication for debugging
+  Serial.begin(9600);
+
+  // Initialize LED pins as outputs
+  for (int i = 0; i < waveLEDPinsNum; i++) {
+    pinMode(waveLEDPins[i], OUTPUT);
+  }
+  // Initialize LED pins as outputs; saved for later
+  for (int i = 0; i < connectionLEDPinsNum; i++) {
+    pinMode(connectionLEDPins[i], OUTPUT);
+  }
+
+
+  /*
+  Calibration: calibrate during the first few seconds
+  Based on the code example below (public domain).
+  https://www.arduino.cc/en/Tutorial/BuiltInExamples/Calibration
+  */
+
+  // calibrate spots' minimium values: hands-off value
+  // record the min values seperately to provent the "bounce back" giving the false mini pressure
+  // siginal the beginning of the calibration period
+  digitalWrite(waveLEDPins[0], HIGH);
+  digitalWrite(waveLEDPins[waveLEDPinsNum - 1], HIGH);
+  // calibrate during the first five seconds
+  while (millis() < 2000) {
+    for (int i = 0; i < sensorNum; i++) {
+      int thisSensorValue = analogRead(sensorPins[i]);
+      // record the minimum sensor value
+      if (thisSensorValue < sensorMin[i]) {
+        sensorMin[i] = thisSensorValue;
+        // Serial.println(thisSensorValue); // for debugging
+      }
+    }
+  }
+  // signal the end of the calibration period
+  digitalWrite(waveLEDPins[0], LOW);
+  digitalWrite(waveLEDPins[waveLEDPinsNum - 1], LOW);
+
+  // calibrate spot A' maximium values: press-down value
+  // siginal the beginning of the calibration period
+  digitalWrite(waveLEDPins[1], HIGH);
+  // calibrate during the 3-5 second
+  while (millis() < 5000) {
+    int thisSensorValue = analogRead(sensorPins[0]);
+    // record the maximum sensor value
+    if (thisSensorValue > sensorMax[0]) {
+      sensorMax[0] = thisSensorValue;
+    }
+    Serial.println(thisSensorValue); // for debugging
+  }
+  // signal the end of the calibration period
+  digitalWrite(waveLEDPins[1], LOW);
+
+  // calibrate spot B' maximium values: press-down value
+  // siginal the beginning of the calibration period
+  digitalWrite(waveLEDPins[waveLEDPinsNum - 2], HIGH);
+  // calibrate during 6-8 second
+  while (millis() < 8000) {
+    int thisSensorValue = analogRead(sensorPins[1]);
+    // record the maximum sensor value
+    if (thisSensorValue > sensorMax[1]) {
+      sensorMax[1] = thisSensorValue;
+    }
+    Serial.println(thisSensorValue); // for debugging
+  }
+  // signal the end of the calibration period
+  digitalWrite(waveLEDPins[waveLEDPinsNum - 2], LOW);
+
+
+  // set connectionTriggers
+  for (int i = 0; i < sensorNum; i++) {
+    connectionTrigger[i] = sensorMin[i] + (sensorMax[i] - sensorMin[i]) * connectionSensitivity;
+  }
+  // for debugging
+  Serial.print(" A:");
+  Serial.println(sensorMin[0]);
+  Serial.println(sensorMax[0]);
+  Serial.println(connectionTrigger[0]);
+  Serial.println("B: ");
+  Serial.println(sensorMin[1]);
+  Serial.println(sensorMax[1]);
+  Serial.println(connectionTrigger[1]);
+  Serial.println(".");
+}
+
+
+void loop() {
+
+  // animation: borrowed from class example
+  int initial_brightness = oscillate(10, 180, 2000);
+  analogWrite(waveLEDPins[0], initial_brightness);
+
+  // Read the analog value from the pressure sensor
+  A_sensorValue = analogRead(sensorPins[0]);
+  B_sensorValue = analogRead(sensorPins[1]);
+  // map the senor value
+  A_constrainedInput = constrain(A_sensorValue, sensorMin[0], sensorMax[0]);
+  B_constrainedInput = constrain(B_sensorValue, sensorMin[1], sensorMax[1]);
+  // map the senor value to light strength
+  A_mappedSensorValue = map(A_constrainedInput, sensorMin[0], sensorMax[0], 0, 255);
+  B_mappedSensorValue = map(A_constrainedInput, sensorMin[1], sensorMax[1], 0, 255);
+  // Map the sensor value to the number of LEDs to light up
+  int A_ledToLight = map(A_constrainedInput, sensorMin[0], sensorMax[0], 0, waveLEDPinsNum);
+  int B_ledToLight = map(B_constrainedInput, sensorMin[1], sensorMax[1], waveLEDPinsNum, 0);
+
+  // Print the sensor value and number of lit LEDs for debugging
+  // Serial.print("Sensor A value: ");
+  // Serial.println(A_sensorValue);
+  // Serial.print("Sensor B value: ");
+  // Serial.println(B_sensorValue);
+  // Serial.print("mapped A value: ");
+  // Serial.println(A_mappedSensorValue);
+  // Serial.print("mapped B value: ");
+  // Serial.println(B_mappedSensorValue);
+  // Serial.print(" | A LEDs lit: ");
+  // Serial.println(A_ledToLight);
+  // Serial.print(" | B LEDs lit: ");
+  // Serial.println(B_ledToLight);
+
+  for (int i = 0; i < waveLEDPinsNum; i++) {
+    if (i == 3 || i == 4 || i == 5) {
+      digitalWrite(waveLEDPins[i], LOW);
+    } else {
+      analogWrite(waveLEDPins[i], 0);
+    }
+    for (int i = 0; i < connectionLEDPinsNum; i++) {
+      analogWrite(connectionLEDPins[i], 0);
+    }
+  }
+
+
+  // when player A is pressing
+  if (A_constrainedInput > sensorMin[0]) {
+    // if it lightens up the other spot, show the blinking animation
+    if (A_ledToLight == waveLEDPinsNum) {
+      analogWrite(waveLEDPins[waveLEDPinsNum - 1], initial_brightness);
+    };
+    // Light up the appropriate number of LEDs
+    for (int i = 0; i < waveLEDPinsNum; i++) {
+      // digital outputs are used on the centre three, creating a slow-down animation; analog ones are used on the sides
+      if (i == A_ledToLight) {
+        switch (i) {
+          case 3:
+            digitalWrite(waveLEDPins[i], HIGH);
+            break;
+          case 4:
+            digitalWrite(waveLEDPins[i], HIGH);
+            digitalWrite(waveLEDPins[i - 1], HIGH);
+            break;
+          case 5:
+            digitalWrite(waveLEDPins[i], HIGH);
+            digitalWrite(waveLEDPins[i - 1], HIGH);
+            digitalWrite(waveLEDPins[i - 2], HIGH);
+            break;
+          default:
+            analogWrite(waveLEDPins[i], waveStrength[0]);
+            analogWrite(waveLEDPins[i - 1], waveStrength[1]);
+            analogWrite(waveLEDPins[i - 2], waveStrength[2]);
+        }
+      }
+    }
+  }
+
+  // when player B is pressing: same logical but different direction of the waves
+  if (B_constrainedInput > sensorMin[1]) {
+
+    // Light up the appropriate number of LEDs
+    for (int i = 0; i < waveLEDPinsNum; i++) {
+
+      if (i == B_ledToLight) {
+        switch (i) {
+          case 5:
+            digitalWrite(waveLEDPins[i], HIGH);
+            break;
+          case 4:
+            digitalWrite(waveLEDPins[i], HIGH);
+            digitalWrite(waveLEDPins[i + 1], HIGH);
+            break;
+          case 3:
+            digitalWrite(waveLEDPins[i], HIGH);
+            digitalWrite(waveLEDPins[i + 1], HIGH);
+            digitalWrite(waveLEDPins[i + 2], HIGH);
+            break;
+          case 0:
+            analogWrite(waveLEDPins[i], waveStrength[0]);
+            analogWrite(waveLEDPins[i + 1], waveStrength[1]);
+          default:
+            analogWrite(waveLEDPins[i], waveStrength[0]);
+            analogWrite(waveLEDPins[i + 1], waveStrength[1]);
+            analogWrite(waveLEDPins[i + 2], waveStrength[2]);
+        }
+      }
+    }
+  }
+
+  if (A_constrainedInput >= connectionTrigger[0] && B_constrainedInput >= connectionTrigger[1]) {
+    // if both is pressed, lighten up all the LEDs
+    for (int i = 0; i < waveLEDPinsNum; i++) {
+      if (i == 3 || i == 4 || i == 5) {
+        digitalWrite(waveLEDPins[i], HIGH);
+      } else {
+        analogWrite(waveLEDPins[i], 255);
+      }
+    }
+  }
+}
+
+// borrowed from class example
+// Function to calculate oscillating values
+int oscillate(int minVal, int maxVal, int oscillationTime) {
+  // Calculate current position in oscillation cycle (0.0 to 1.0)
+  float cyclePosition = (millis() % oscillationTime) / (float)oscillationTime;
+
+  // Calculate sine value (-1 to 1) for current cycle position
+  float sineValue = sin(cyclePosition * 2 * PI);
+
+  //Map sine wave (-1 to 1) to desired range (minVal to maxVal)
+  //because the map function only returns integers, the value is multiplied by 1000
+  int brightness = map(sineValue * 1000, -1000, 1000, minVal, maxVal);
+
+  //output the value
+  return brightness;
+}
+
